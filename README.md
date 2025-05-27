@@ -12,8 +12,8 @@ Ini adalah aplikasi berbasis Laravel 12 untuk mengelola pengajuan surat oleh mah
 
 ### 1. Clone Repository
 ```bash
-git clone https://github.com/Geannnnn/tumbal.git
-cd tumbal
+git clone https://github.com/FeatingRates/PBL-214.git
+cd PBL-214
 ```
 
 ### 2. Install Dependency
