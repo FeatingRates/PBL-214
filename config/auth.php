@@ -40,6 +40,12 @@ return [
             'driver' => 'session',
             'provider' => 'users',
         ],
+
+
+        'kepala_sub' => [
+            'driver' => 'session',
+            'provider' => 'kepala_subs',
+        ],
     ],
 
     /*
@@ -63,6 +69,11 @@ return [
         'users' => [
             'driver' => 'eloquent',
             'model' => env('AUTH_MODEL', App\Models\User::class),
+
+            'kepala_subs' => [
+            'driver' => 'eloquent',
+            'model' => App\Models\KepalaSub::class,
+        ],
         ],
 
         // 'users' => [
