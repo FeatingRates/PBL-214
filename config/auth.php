@@ -40,7 +40,11 @@ return [
             'driver' => 'session',
             'provider' => 'users',
         ],
-
+        
+    'staff' => [
+            'driver' => 'session',
+            'provider' => 'staffs',
+        ],
 
         'kepala_sub' => [
             'driver' => 'session',
@@ -69,6 +73,12 @@ return [
         'users' => [
             'driver' => 'eloquent',
             'model' => env('AUTH_MODEL', App\Models\User::class),
+
+        'staffs' => [
+            'driver' => 'eloquent',
+            'model' => App\Models\Staff::class,
+        ],
+
 
             'kepala_subs' => [
             'driver' => 'eloquent',
