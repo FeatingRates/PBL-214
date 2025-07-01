@@ -10,7 +10,27 @@ Route::get('/', function () {
 
 Route::middleware(['multi-auth', 'check-privileges'])->group(function () {
 
-    
+       // ======================= Staff =======================
+    Route::middleware('role:staff')->group(function () {
+        Route::prefix('staff-umum')->controller(staffumumController::class)->group(function () {
+            Route::get('/', 'index')->name('staffumum.dashboard');
+            Route::get('/search', 'search')->name('staffumum.search');
+            Route::get('/statistik','statistik')->name('staffumum.statistik');
+            Route::get('/terbitkan','terbitkan')->name('staffumum.terbitkan');
+            Route::get('/statussurat','statussurat')->name('staffumum.statussurat');
+            Route::get('/statussurat/data', 'getStatusSuratData')->name('staffumum.statussurat.data');
+            Route::get('/statussurat/{id}', 'showStatusSurat')->name('staffumum.statussurat.show');
+            Route::get('/jenissurat','jenissurat')->name('staffumum.jenissurat');
+            Route::post('/jenis-surat', 'storeJenisSurat')->name('staffumum.jenissurat.store');
+            Route::put('/jenis-surat/{id}', 'updateJenisSurat')->name('staffumum.jenissurat.update');
+            Route::delete('/jenis-surat/{id}', 'destroyJenisSurat')->name('staffumum.jenissurat.destroy');
+            Route::get('/tinjau-surat', 'tinjauSurat')->name('staffumum.tinjausurat');
+            Route::get('/tinjau-surat/data', 'getSuratData')->name('staffumum.tinjau.data');
+            Route::get('/surat/{id}/tinjau', 'showDetailSurat')->name('staffumum.tinjau.detail');
+            Route::post('/surat/{id}/tolak', 'tolakSurat')->name('staffumum.surat.tolak');
+            Route::post('/surat/{id}/approve', 'approveSurat')->name('staffumum.surat.approve');
+        }); 
+
     Route::prefix('tata-usaha')->controller(tatausahaController::class)->group(function () {
             Route::get('/', 'index')->name('tatausaha.dashboard');
             Route::get('/search', 'search')->name('tatausaha.search');
