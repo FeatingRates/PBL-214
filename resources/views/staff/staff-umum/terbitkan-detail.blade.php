@@ -2,7 +2,7 @@
 
 @include('components.alertnotif')
 
-@section('title','Tinjau Surat - Kepala Sub')
+@section('title','Terbitkan Surat - Staff Umum')
 
 @section('content')
 <div class="flex h-screen bg-gray-50 ml-[250px] overflow-x-hidden">
@@ -12,25 +12,30 @@
         @include('layouts.header', ['notifikasiSurat' => $notifikasiSurat ?? collect([])])
         <main class="flex-1 p-4 sm:p-6 md:p-8 lg:p-10">
             <div class="container mx-auto">
+                @if(!$surat->nomor_surat || optional($surat->statusTerakhir->statusSurat)->status_surat !== 'Diterbitkan')
+                <form id="form-terbitkan" action="{{ route('staffumum.terbitkan.surat', $surat->id_surat) }}" method="POST">
+                    @csrf
+                @endif
+                
                 <div class="flex justify-end gap-2 mb-6">
-                    <!-- Approve Form -->
-                    <form id="form-approve" action="{{ route('staffumum.surat.approve', $surat->id_surat) }}" method="POST" class="inline">
-                        @csrf
-                        <button type="button"
-                            onclick="approveSurat(event)"
-                            class="cursor-pointer px-5 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 focus:ring-4 focus:outline-none focus:ring-indigo-300 transition-all duration-300 hover:scale-110">
-                            Approve
-                        </button>
-                    </form>
-
-                    <!-- Tolak Button (open modal) -->
-                    <button type="button" onclick="openTolakModal()"
-                        class="cursor-pointer px-5 py-2 text-sm font-medium text-white bg-rose-600 rounded-lg hover:bg-rose-700 focus:ring-4 focus:outline-none focus:ring-rose-300 transition-all duration-300 hover:scale-110">
-                        Tolak
+                    @if($surat->nomor_surat && optional($surat->statusTerakhir->statusSurat)->status_surat === 'Diterbitkan')
+                    <div class="inline-flex items-center gap-2 px-4 py-2 bg-green-100 text-green-800 rounded-lg">
+                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                        </svg>
+                        <span class="font-medium">Surat Sudah Diterbitkan</span>
+                    </div>
+                    @else
+                    <!-- Terbitkan Button -->
+                    <button type="button"
+                        onclick="terbitkanSurat(event)"
+                        class="cursor-pointer px-5 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 focus:ring-4 focus:outline-none focus:ring-green-300 transition-all duration-300 hover:scale-110">
+                        Terbitkan
                     </button>
-
+                    @endif
+                    
                     <!-- Kembali -->
-                    <a href="{{ route('staffumum.tinjausurat') }}"
+                    <a href="{{ route('staffumum.terbitkan') }}"
                     class="inline-block px-5 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 focus:ring-4 focus:outline-none focus:ring-gray-200 transition-all duration-300 hover:scale-110">
                         Kembali
                     </a>
@@ -47,11 +52,19 @@
                     <div class="space-y-3 text-gray-700 mb-8">
                         <div class="grid grid-cols-12">
                             <span class="col-span-3 font-medium">Nomor surat</span>
-                            <span class="col-span-9">: {{ $surat->nomor_surat ?? '-' }}</span>
+                            <span class="col-span-9">: 
+                                @if(!$surat->nomor_surat || optional($surat->statusTerakhir->statusSurat)->status_surat !== 'Diterbitkan')
+                                    <input type="text" name="nomor_surat" id="nomor_surat" value="{{ old('nomor_surat', $surat->nomor_surat) }}" required 
+                                           class="border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent ml-2" 
+                                           placeholder="Masukkan nomor surat">
+                                @else
+                                    {{ $surat->nomor_surat }}
+                                @endif
+                            </span>
                         </div>
                         <div class="grid grid-cols-12">
                             <span class="col-span-3 font-medium">Tanggal Pengajuan</span>
-                            <span class="col-span-9">: {{ \Carbon\Carbon::parse($surat->tanggal_pengajuan)->locale('id')->translatedFormat('d-m-Y') }}</span>
+                            <span class="col-span-9">: {{ $surat->tanggal_pengajuan ? \Carbon\Carbon::parse($surat->tanggal_pengajuan)->translatedFormat('d-m-Y') : '-' }}</span>
                         </div>
                         <div class="grid grid-cols-12">
                             <span class="col-span-3 font-medium">Dari</span>
@@ -90,71 +103,60 @@
                             <label class="block text-sm font-medium text-gray-700">Deskripsi</label>
                             <p class="mt-1 text-sm text-gray-900">{{ $surat->deskripsi ?: 'Tidak ada deskripsi' }}</p>
                         </div>
-
                     </div>
 
                     <!-- Tanda Tangan -->
                     <div class="flex justify-end">
                         <div class="text-center">
-                            <p class="mb-24">Batam, {{ \Carbon\Carbon::now()->locale('id')->translatedFormat('d-m-Y') }}</p>
-                            <p class="font-semibold">( Kepala Sub Bagian )</p>
+                            <p class="mb-4">Batam, {{ \Carbon\Carbon::now()->translatedFormat('d-m-Y') }}</p>
+                            <!-- QR Code Verifikasi -->
+                            <div class="mb-4 text-center">
+                                <img class="mx-auto" src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data={{ urlencode('https://tte.polibatam.ac.id/index.php?page=qrsign&id=UWtZZ1RNUkdldFU9') }}" alt="QR Verifikasi TTE">
+                                <p class="text-xs text-gray-500 mt-2">Link: <a href="https://tte.polibatam.ac.id/index.php?page=qrsign&id=UWtZZ1RNUkdldFU9" target="_blank" class="underline text-blue-600">Verifikasi TTE</a></p>
+                            </div>
+                            <p class="font-semibold">( Direktur )</p>
                         </div>
                     </div>
                 </div>
+                
+                @if(!$surat->nomor_surat || optional($surat->statusTerakhir->statusSurat)->status_surat !== 'Diterbitkan')
+                </form>
+                @endif
             </div>
         </main>
     </div>
 </div>
 
-<!-- Modal Tolak -->
-<div id="modalTolak" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 hidden">
-    <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
-        <h2 class="text-lg font-bold mb-4">Tolak Surat</h2>
-        <form id="form-tolak" action="{{ route('staffumum.surat.tolak', $surat->id_surat) }}" method="POST">
-            @csrf
-            <textarea name="komentar" required class="w-full border rounded p-2 mb-4" rows="4" placeholder="Tulis alasan penolakan..."></textarea>
-            <div class="flex justify-end gap-2">
-                <button type="button" onclick="closeTolakModal()" class="px-4 py-2 bg-gray-200 rounded">Batal</button>
-                <button type="submit" class="px-4 py-2 bg-rose-600 text-white rounded">Kirim</button>
-            </div>
-        </form>
-    </div>
-</div>
-
 <script>
-function approveSurat(e) {
+function terbitkanSurat(e) {
     e.preventDefault();
+    
+    // Validasi nomor surat
+    const nomorSurat = document.getElementById('nomor_surat').value.trim();
+    if (!nomorSurat) {
+        Swal.fire({
+            title: 'Error!',
+            text: 'Nomor surat harus diisi!',
+            icon: 'error',
+            confirmButtonColor: '#d33',
+        });
+        return;
+    }
+    
     Swal.fire({
-        title: 'Setujui Surat?',
-        text: 'Surat akan diteruskan ke Kepala Sub untuk proses selanjutnya.',
+        title: 'Terbitkan Surat?',
+        text: 'Surat akan diterbitkan dengan nomor: ' + nomorSurat,
         icon: 'question',
         showCancelButton: true,
-        confirmButtonColor: '#3085d6',
+        confirmButtonColor: '#28a745',
         cancelButtonColor: '#d33',
-        confirmButtonText: 'Setujui',
+        confirmButtonText: 'Terbitkan',
         cancelButtonText: 'Batal'
     }).then((result) => {
         if (result.isConfirmed) {
-            document.getElementById('form-approve').submit();
+            document.getElementById('form-terbitkan').submit();
         }
     });
-}
-
-function tolakSurat() {
-    if (confirm('Apakah Anda yakin ingin menolak surat ini?')) {
-        // Implementasi logika penolakan
-        // Anda bisa menambahkan form submit di sini jika perlu
-        alert('Surat berhasil ditolak!');
-        window.location.href = '{{ route("kepalasub.persetujuansurat") }}';
-    }
-}
-
-function openTolakModal() {
-    document.getElementById('modalTolak').classList.remove('hidden');
-}
-
-function closeTolakModal() {
-    document.getElementById('modalTolak').classList.add('hidden');
 }
 </script>
 @endsection 

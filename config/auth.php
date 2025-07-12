@@ -40,15 +40,30 @@ return [
             'driver' => 'session',
             'provider' => 'users',
         ],
-        
-    'staff' => [
+
+        'pengusul' => [
+            'driver' => 'session',
+            'provider' => 'pengusuls',
+        ],
+
+        'staff' => [
             'driver' => 'session',
             'provider' => 'staffs',
+        ],
+
+        'admin' => [
+            'driver' => 'session',
+            'provider' => 'admins',
         ],
 
         'kepala_sub' => [
             'driver' => 'session',
             'provider' => 'kepala_subs',
+        ],
+
+        'direktur' => [
+            'driver' => 'session',
+            'provider' => 'direkturs',
         ],
     ],
 
@@ -72,24 +87,33 @@ return [
     'providers' => [
         'users' => [
             'driver' => 'eloquent',
-            'model' => env('AUTH_MODEL', App\Models\User::class),
+            'model' => App\Models\User::class,
+        ],
+
+        'pengusuls' => [
+            'driver' => 'eloquent',
+            'model' => App\Models\Pengusul::class,
+        ],
 
         'staffs' => [
             'driver' => 'eloquent',
             'model' => App\Models\Staff::class,
         ],
 
+         'admins' => [
+            'driver' => 'eloquent',
+            'model' => App\Models\Admin::class,
+        ],
 
-            'kepala_subs' => [
+        'kepala_subs' => [
             'driver' => 'eloquent',
             'model' => App\Models\KepalaSub::class,
         ],
-        ],
 
-        // 'users' => [
-        //     'driver' => 'database',
-        //     'table' => 'users',
-        // ],
+        'direkturs' => [
+            'driver' => 'eloquent',
+            'model' => App\Models\Direktur::class,
+        ],
     ],
 
     /*
@@ -118,6 +142,31 @@ return [
             'expire' => 60,
             'throttle' => 60,
         ],
+            'pengusuls' => [
+            'provider' => 'pengusuls',
+            'table' => 'password_reset_tokens',
+            'expire' => 60,
+            'throttle' => 60,
+        ],
+            'staffs' => [
+                'provider' => 'staffs',
+                'table' => 'password_reset_tokens',
+                'expire' => 60,
+                'throttle' => 60,
+        ],
+            'kepala_subs' => [
+                'provider' => 'kepala_subs',
+                'table' => 'password_reset_tokens',
+                'expire' => 60,
+                'throttle' => 60,
+        ],
+            'admins' => [
+                'provider' => 'admins',
+                'table' => 'password_reset_tokens',
+                'expire' => 60,
+                'throttle' => 60,
+        ],
+        
     ],
 
     /*

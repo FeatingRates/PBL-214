@@ -15,10 +15,11 @@ return new class extends Migration
             $table->id();
             $table->unsignedBigInteger('id_status_surat');
             $table->unsignedBigInteger('id_surat');
+            $table->string('keterangan');
+            $table->unsignedBigInteger('diubah_oleh')->nullable();
+            $table->string('diubah_oleh_tipe')->nullable();
             $table->timestamp('tanggal_rilis')->useCurrent();
 
-            $table->foreign('id_status_surat')->references('id_status_surat')->on('status_surat')->onDelete('cascade');
-            $table->foreign('id_surat')->references('id_surat')->on('surat')->onDelete('cascade');
         });
     }
 
