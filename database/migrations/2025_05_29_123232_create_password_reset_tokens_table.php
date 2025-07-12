@@ -11,13 +11,11 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('pivot_pengusul_surat', function (Blueprint $table) {
-            $table->id();
-            $table->unsignedBigInteger('id_pengusul');
-            $table->unsignedBigInteger('id_surat');
-            $table->unsignedBigInteger('id_peran_keanggotaan');
-
-         });
+        Schema::create('password_reset_tokens', function (Blueprint $table) {
+            $table->string('email')->index();
+            $table->string('token');
+            $table->timestamp('created_at')->nullable();
+        });
     }
 
     /**
@@ -25,6 +23,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('pivot_pengusul_surat');
+        Schema::dropIfExists('password_reset_tokens');
     }
 };

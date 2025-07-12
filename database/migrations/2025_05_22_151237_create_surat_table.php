@@ -20,13 +20,11 @@ return new class extends Migration
             $table->unsignedBigInteger('id_jenis_surat')->nullable();
             $table->unsignedBigInteger('dibuat_oleh')->nullable();
             $table->string('deskripsi', 300)->nullable();
+            $table->string('tujuan_surat')->nullable();
             $table->boolean('is_draft')->default(0);
             $table->string('lampiran')->nullable();
             $table->timestamps();
 
-            // Foreign keys
-            $table->foreign('id_jenis_surat')->references('id_jenis_surat')->on('jenis_surat')->onDelete('restrict')->onUpdate('restrict');
-            $table->foreign('dibuat_oleh')->references('id_pengusul')->on('pengusul')->onDelete('restrict')->onUpdate('cascade');
         });
     }
 
