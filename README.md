@@ -12,8 +12,8 @@ Ini adalah aplikasi berbasis Laravel 12 untuk mengelola pengajuan surat oleh mah
 
 ### 1. Clone Repository
 ```bash
-git clone https://github.com/FeatingRates/PBL-214.git
-cd PBL-214
+git clone https://github.com/Geannnnn/tumbal.git
+cd tumbal
 ```
 
 ### 2. Install Dependency
@@ -25,6 +25,7 @@ npm install
 ### 3. Buat File `.env`
 ```bash
 copy .env.example .env
+cp .env.example .env jika menggunakan terminal
 ```
 
 Edit file `.env` dan sesuaikan konfigurasi database:
@@ -53,6 +54,7 @@ Atau import manual file SQL:
 ### 6. Jalankan Vite (untuk frontend)
 ```bash
 npm run dev
+atau bisa lebih simpel dengan npm run start
 ```
 
 ### 7. Jalankan Laravel Server
