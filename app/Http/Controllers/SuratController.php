@@ -257,7 +257,7 @@ class SuratController extends Controller
 
         $rules = [
             'judul_surat' => 'required|string|max:255',
-            'lampiran' => 'nullable|file|mimes:pdf,jpeg,png,jpg,docx,xlsx|max:10240',
+            'lampiran' => 'nullable|file|mimes:pdf|max:10240',
             'tujuan_surat' => 'nullable|string|max:500',
         ];
         if (!$personalSurat) {
@@ -273,7 +273,9 @@ class SuratController extends Controller
             $rules['jenis_surat'] = 'required|exists:jenis_surat,id_jenis_surat';
             $rules['deskripsi'] = 'required|string|max:300';
         }
-        $request->validate($rules);
+        $request->validate($rules,[
+            'lampiran.mimes'=> 'Format file yang diterima hanya PDF',
+        ]);
 
         DB::beginTransaction();
         try {
@@ -302,11 +304,22 @@ class SuratController extends Controller
 
             $surat->save();
 
+            if (!$isDraft) {
+                RiwayatStatusSurat::create([
+                    'id_surat' => $surat->id_surat,
+                    'id_status_surat' => 2, 
+                    'tanggal_rilis' => now('Asia/Jakarta'),
+                    'keterangan' => 'Diajukan oleh Pengusul',
+                    'diubah_oleh' => $user->id_pengusul,
+                    'diubah_oleh_tipe' => 'pengusul',
+                ]);
+            }
+
             // Update riwayat status surat
             if (!$isDraft) { // Jika surat diajukan (is_draft = 1)
                 $lastRiwayat = RiwayatStatusSurat::where('id_surat', $surat->id_surat)
                     ->orderBy('tanggal_rilis', 'desc')
-                    ->orderBy('id_riwayat_status_surat', 'desc')
+                    ->orderBy('id', 'desc')
                     ->first();
                 $statusDraft = StatusSurat::where('status_surat', 'Draft')->first();
                 $statusDiajukan = StatusSurat::where('status_surat', 'Diajukan')->first();

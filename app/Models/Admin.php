@@ -2,10 +2,14 @@
 
 namespace App\Models;
 
+use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Contracts\Auth\CanResetPassword;
+use Illuminate\Auth\Passwords\CanResetPassword as CanResetPasswordTrait;
 
-class Admin extends Model
+class Admin extends Authenticatable implements CanResetPassword
 {
+    use CanResetPasswordTrait;
     protected $table = 'admin';
     protected $primaryKey = 'id_admin';
 

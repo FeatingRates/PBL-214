@@ -350,6 +350,8 @@ class tatausahaController extends Controller
             });
         }
 
+        $query->orderBy("tanggal_pengajuan","asc");
+
         return DataTables::of($query)
             ->addIndexColumn()
             ->addColumn('judul_surat', function($row) {
@@ -406,7 +408,7 @@ class tatausahaController extends Controller
         $riwayat = RiwayatStatusSurat::create([
             'id_surat' => $surat->id_surat,
             'id_status_surat' => $statusDitolak->id_status_surat,
-            'tanggal_rilis' => $baseTime->copy()->addSecond(1),
+            'tanggal_rilis' => now('Asia/Jakarta'),
             'keterangan' => 'Ditolak oleh Tata Usaha',
             'diubah_oleh' => auth('staff')->user()->id_staff,
             'diubah_oleh_tipe' => 'staff',
@@ -444,7 +446,6 @@ class tatausahaController extends Controller
 
         // Ambil status terakhir surat
         $lastRiwayat = $surat->riwayatStatus()->latest('tanggal_rilis')->first();
-        $now = $lastRiwayat ? Carbon::parse($lastRiwayat->tanggal_rilis)->addSecond() : now();
 
         // Jika status terakhir adalah Diajukan, lanjutkan ke Divalidasi dan Menunggu Persetujuan
         if ($lastRiwayat && $lastRiwayat->id_status_surat == $statusDiajukan->id_status_surat) {
@@ -452,7 +453,7 @@ class tatausahaController extends Controller
             RiwayatStatusSurat::create([
                 'id_surat' => $surat->id_surat,
                 'id_status_surat' => $statusValidasi->id_status_surat,
-                'tanggal_rilis' => $now,
+                'tanggal_rilis' => now('Asia/Jakarta'),
                 'diubah_oleh' => auth('staff')->user()->id_staff,
                 'diubah_oleh_tipe' => 'staff',
             ]);
@@ -460,7 +461,7 @@ class tatausahaController extends Controller
             RiwayatStatusSurat::create([
                 'id_surat' => $surat->id_surat,
                 'id_status_surat' => $statusMenunggu->id_status_surat,
-                'tanggal_rilis' => $now->copy()->addSecond(),
+                'tanggal_rilis' => now('Asia/Jakarta')->addSeconds(1),
                 'diubah_oleh' => auth('staff')->user()->id_staff,
                 'diubah_oleh_tipe' => 'staff',
             ]);
@@ -675,17 +676,11 @@ class tatausahaController extends Controller
         $surat->tanggal_surat_dibuat = now('Asia/Jakarta')->toDateString();
         $surat->save();
 
-        // Ambil tanggal_rilis terakhir dari riwayat status surat ini
-        $lastRiwayat = RiwayatStatusSurat::where('id_surat', $surat->id_surat)
-            ->orderBy('tanggal_rilis', 'desc')
-            ->first();
-        $baseTime = $lastRiwayat ? Carbon::parse($lastRiwayat->tanggal_rilis) : now();
-
         // Tambahkan riwayat status baru 'Diterbitkan' setelah status terakhir
         RiwayatStatusSurat::create([
             'id_surat' => $surat->id_surat,
             'id_status_surat' => $statusDiterbitkan->id_status_surat,
-            'tanggal_rilis' => $baseTime->copy()->addSecond(1),
+            'tanggal_rilis' => now('Asia/Jakarta'),
             'keterangan' => 'Diterbitkan oleh Tata Usaha',
             'diubah_oleh' => auth('staff')->user()->id_staff,
             'diubah_oleh_tipe' => 'staff',
