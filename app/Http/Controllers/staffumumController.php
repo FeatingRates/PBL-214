@@ -27,36 +27,37 @@ class staffumumController extends Controller
             'status' => 'Status', 
         ];
 
-        // Get jenis surat IDs for Staff Umum letter types (Surat Pengantar, Surat Permohonan, Surat Cuti Akademik)
-        $jenisSuratIds = JenisSurat::whereIn('jenis_surat', ['Surat Pengantar', 'Surat Permohonan', 'Surat Cuti Akademik'])->pluck('id_jenis_surat');
-        
-        // Get role mahasiswa ID
-        $roleMahasiswa = RolePengusul::where('role', 'Dosen')->first();
-        
-        // Get status IDs
-        $statusDiajukan = StatusSurat::where('status_surat', 'Diajukan')->first();
+        // Jenis surat sesuai permintaan
+        $jenisSuratIds = JenisSurat::whereIn('jenis_surat', ['Surat Tugas', 'Surat Undangan Kegiatan', 'Surat Izin Tidak Masuk'])->pluck('id_jenis_surat');
+        $roleDosen = RolePengusul::where('role', 'Dosen')->first();
+        $statusMenunggu = StatusSurat::where('status_surat', 'Diajukan')->first();
         $statusDitolak = StatusSurat::where('status_surat', 'Ditolak')->first();
 
-        // Calculate surat diterima (letters from mahasiswa with specific types)
+        // Surat diterima: status terakhir 'Menunggu Persetujuan'
         $suratDiterima = 0;
-        if ($roleMahasiswa && $statusDiajukan) {
+        if ($roleDosen && $statusMenunggu) {
             $suratDiterima = Surat::where('is_draft', 1)
                 ->whereIn('id_jenis_surat', $jenisSuratIds)
-                ->whereHas('dibuatOleh', function($q) use ($roleMahasiswa) {
-                    $q->where('id_role_pengusul', $roleMahasiswa->id_role_pengusul);
+                ->whereHas('dibuatOleh', function($q) use ($roleDosen) {
+                    $q->where('id_role_pengusul', $roleDosen->id_role_pengusul);
                 })
-                ->whereHas('riwayatStatus', function($q) use ($statusDiajukan) {
-                    $q->where('id_status_surat', $statusDiajukan->id_status_surat);
+                ->whereHas('statusTerakhir', function($q) use ($statusMenunggu) {
+                    $q->where('id_status_surat', $statusMenunggu->id_status_surat);
                 })
                 ->count();
         }
 
-        // Calculate surat ditolak (all rejected letters)
+        // Surat ditolak: status terakhir 'Ditolak' dan diubah_oleh_tipe = 'staff'
         $suratDitolak = 0;
-        if ($statusDitolak) {
+        if ($roleDosen && $statusDitolak) {
             $suratDitolak = Surat::where('is_draft', 1)
-                ->whereHas('riwayatStatus', function($q) use ($statusDitolak) {
-                    $q->where('id_status_surat', $statusDitolak->id_status_surat);
+                ->whereIn('id_jenis_surat', $jenisSuratIds)
+                ->whereHas('dibuatOleh', function($q) use ($roleDosen) {
+                    $q->where('id_role_pengusul', $roleDosen->id_role_pengusul);
+                })
+                ->whereHas('statusTerakhir', function($q) use ($statusDitolak) {
+                    $q->where('id_status_surat', $statusDitolak->id_status_surat)
+                      ->where('diubah_oleh_tipe', 'staff');
                 })
                 ->count();
         }
@@ -207,6 +208,11 @@ class staffumumController extends Controller
             'jenis_surat' => 'required|string|max:255',
         ]);
 
+        // Cek duplikasi
+        if (JenisSurat::whereRaw('LOWER(jenis_surat) = ?', [strtolower($request->jenis_surat)])->exists()) {
+            return redirect()->back()->with('error', 'Jenis surat sudah ada!');
+        }
+
         JenisSurat::create([
             'jenis_surat' => $request->jenis_surat,
         ]);
@@ -220,20 +226,21 @@ class staffumumController extends Controller
             'jenis_surat' => 'required|string|max:255',
         ]);
 
+        // Cek duplikasi, kecuali untuk dirinya sendiri
+        if (JenisSurat::whereRaw('LOWER(jenis_surat) = ?', [strtolower($request->jenis_surat)])
+            ->where('id_jenis_surat', '!=', $id)
+            ->exists()) {
+            return redirect()->back()->with('error', 'Jenis surat sudah ada!');
+        }
+
         try {
             JenisSurat::where('id_jenis_surat', $id)->update([
                 'jenis_surat' => $request->jenis_surat,
             ]);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Jenis surat berhasil diperbarui'
-            ]);
+            return redirect()->route('staffumum.jenissurat')->with('success', 'Jenis surat berhasil diperbarui');
         } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Gagal memperbarui jenis surat: ' . $e->getMessage()
-            ], 500);
+            return redirect()->back()->with('error', 'Gagal memperbarui jenis surat: ' . $e->getMessage());
         }
     }
 
@@ -386,15 +393,33 @@ class staffumumController extends Controller
 
     public function terbitkanSurat(Request $request, $id)
     {
-        $request->validate([
-            'nomor_surat' => 'required|string|max:255',
-        ]);
         $surat = Surat::findOrFail($id);
         $statusDiterbitkan = StatusSurat::where('status_surat', 'Diterbitkan')->first();
         if (!$statusDiterbitkan) {
             return back()->with('error', 'Status Diterbitkan tidak ditemukan!');
         }
-        $surat->nomor_surat = $request->nomor_surat;
+        // Generate nomor surat otomatis
+        $tahun = now('Asia/Jakarta')->year;
+        $jenisSurat = $surat->jenisSurat;
+        $lastSurat = Surat::where('id_jenis_surat', $surat->id_jenis_surat)
+            ->whereYear('tanggal_surat_dibuat', $tahun)
+            ->whereNotNull('nomor_surat')
+            ->orderByDesc('tanggal_surat_dibuat')
+            ->orderByDesc('id_surat')
+            ->first();
+        $lastNumber = 0;
+        if ($lastSurat && preg_match('/^(\d{3})\//', $lastSurat->nomor_surat, $matches)) {
+            $lastNumber = (int)$matches[1];
+        }
+        $newNumber = str_pad($lastNumber + 1, 3, '0', STR_PAD_LEFT);
+        // Singkatan jenis surat: huruf depan tiap kata
+        $singkatan = collect(explode(' ', $jenisSurat->jenis_surat))->map(function($word) {
+            return strtoupper(substr($word, 0, 1));
+        })->implode('');
+        // Gabungkan tanggal, bulan, jam, menit, detik tanpa pemisah
+        $tanggalJamDetik = now('Asia/Jakarta')->format('dmHis'); // ddmmHHMMSS
+        $nomorSurat = "$newNumber/$singkatan/$tanggalJamDetik/$tahun";
+        $surat->nomor_surat = $nomorSurat;
         $surat->tanggal_surat_dibuat = now('Asia/Jakarta')->toDateString();
         $surat->save();
         $lastRiwayat = RiwayatStatusSurat::where('id_surat', $surat->id_surat)
@@ -406,10 +431,9 @@ class staffumumController extends Controller
             'id_status_surat' => $statusDiterbitkan->id_status_surat,
             'tanggal_rilis' => $baseTime->copy()->addSecond(1),
             'keterangan' => 'Diterbitkan oleh Staff Umum',
-            'diubah_oleh' => auth('staff')->id(),
+            'diubah_oleh' => auth('staff')->user()->id_staff,
             'diubah_oleh_tipe' => 'staff',
         ]);
-
         // Trigger notifikasi ke semua pengusul dan pembuat surat
         foreach ($surat->pengusul as $pengusul) {
             $pengusul->notify(new SuratDiterbitkan($surat));
@@ -417,7 +441,6 @@ class staffumumController extends Controller
         if ($surat->dibuatOleh && !$surat->pengusul->contains('id_pengusul', $surat->dibuat_oleh)) {
             $surat->dibuatOleh->notify(new SuratDiterbitkan($surat));
         }
-
         return redirect()->route('staffumum.terbitkan')->with('success', 'Surat berhasil diterbitkan!');
     }
 
@@ -445,7 +468,7 @@ class staffumumController extends Controller
                 'id_status_surat' => $statusValidasi->id_status_surat,
                 'tanggal_rilis' => $now,
                 'keterangan' => $request->komentar ?? 'Divalidasi oleh Staff Umum',
-                'diubah_oleh' => auth('staff')->id(),
+                'diubah_oleh' => auth('staff')->user()->id_staff,
                 'diubah_oleh_tipe' => 'staff',
             ]);
             // Tambahkan riwayat status "Menunggu Persetujuan" dengan waktu +1 detik
@@ -454,7 +477,7 @@ class staffumumController extends Controller
                 'id_status_surat' => $statusMenunggu->id_status_surat,
                 'tanggal_rilis' => $now->copy()->addSecond(),
                 'keterangan' => 'Dikirim ke Kepala Sub untuk persetujuan',
-                'diubah_oleh' => auth('staff')->id(),
+                'diubah_oleh' => auth('staff')->user()->id_staff,
                 'diubah_oleh_tipe' => 'staff',
             ]);
         } else {
@@ -614,11 +637,11 @@ class staffumumController extends Controller
         }
 
         // Search functionality
-        if ($request->has('search') && $request->search['value'] != '') {
-            $searchValue = $request->search['value'];
-            $query->where(function ($q) use ($searchValue) {
-                $q->where('judul_surat', 'like', "%{$searchValue}%")
-                  ->orWhere('nomor_surat', 'like', "%{$searchValue}%");
+        if ($request->filled('search_judul_surat')) {
+            $search = $request->search_judul_surat;
+            $query->where(function ($q) use ($search) {
+                $q->where('judul_surat', 'like', "%{$search}%")
+                  ->orWhere('nomor_surat', 'like', "%{$search}%");
             });
         }
 

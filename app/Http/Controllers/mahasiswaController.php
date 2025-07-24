@@ -7,7 +7,6 @@ use App\Models\PivotPengusulSurat;
 use App\Models\StatusSurat;
 use App\Models\Surat;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
 use Yajra\DataTables\Facades\DataTables;
 use Illuminate\Support\Facades\DB;
 use App\Models\Pengusul;
@@ -15,65 +14,77 @@ use App\Models\RiwayatStatusSurat;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 use App\Helpers\PengusulHelper;
-use Barryvdh\DomPDF\Facade\Pdf;
-use App\Notifications\SuratDiterbitkan;
 use Illuminate\Notifications\DatabaseNotification;
+use Barryvdh\Snappy\Facades\SnappyPdf;
+use chillerlan\QRCode\QRCode;
+use chillerlan\QRCode\QROptions;
+use Barryvdh\DomPDF\Facade\Pdf;
 
 class mahasiswaController extends Controller
 {   
 
-    public function index () {
-        $user = auth('pengusul')->id();
-        $statusDiterima = StatusSurat::where('status_surat', 'Diterbitkan')->first();
+    public function index()
+{
+    $user = auth('pengusul')->id();
 
-        if ($statusDiterima) {
-            $suratDiterima = Surat::where('is_draft', 1)
-                ->whereNotNull('nomor_surat')
-                ->whereHas('riwayatStatus', function($q) use ($statusDiterima) {
-                    $q->where('id_status_surat', $statusDiterima->id_status_surat);
-                })
-                ->whereHas('pengusul', function ($q) use ($user) {
-                    $q->where('pivot_pengusul_surat.id_pengusul', $user)
-                      ->whereIn('pivot_pengusul_surat.id_peran_keanggotaan', [1, 2]);
-                })
-                ->count();
-        } else {
-            $suratDiterima = 0;
-        }
+    $statusDiterbitkan = StatusSurat::where('status_surat', 'Diterbitkan')->first();
+    $statusDitolak = StatusSurat::where('status_surat', 'Ditolak')->first();
 
-        $statusDitolak = StatusSurat::where('status_surat', 'Ditolak')->first();
+    // Hitung surat DITERIMA (status terakhir Diterbitkan)
+    $suratDiterima = 0;
+    if ($statusDiterbitkan) {
+        $suratDiterima = Surat::whereHas('statusTerakhir', function ($q) use ($statusDiterbitkan) {
+            $q->where('id_status_surat', $statusDiterbitkan->id_status_surat);
+        })
+        ->where(function ($q) use ($user) {
+            $q->whereHas('pengusul', function ($q2) use ($user) {
+                $q2->where('pivot_pengusul_surat.id_pengusul', $user)
+                    ->whereIn('pivot_pengusul_surat.id_peran_keanggotaan', [1, 2]);
+            })
+            ->orWhere('dibuat_oleh', $user);
+        })
+        ->count();
+    }
 
-        if ($statusDitolak) {
-            $suratDitolak = Surat::where('is_draft', 1)
-                ->whereYear('tanggal_surat_dibuat', date('Y')) // Default tahun saat ini
-                ->whereHas('riwayatStatus', function($q) use ($statusDitolak) {
-                    $q->where('id_status_surat', $statusDitolak->id_status_surat);
+    // Hitung surat DITOLAK (status terakhir Ditolak)
+    $suratDitolak = 0;
+    if ($statusDitolak) {
+        $suratDitolak = Surat::whereHas('statusTerakhir', function ($q) use ($statusDitolak) {
+                $q->where('id_status_surat', $statusDitolak->id_status_surat);
+            })
+            ->where(function ($q) use ($user) {
+                $q->whereHas('pengusul', function ($q2) use ($user) {
+                    $q2->where('pivot_pengusul_surat.id_pengusul', $user)
+                        ->whereIn('pivot_pengusul_surat.id_peran_keanggotaan', [1, 2]);
                 })
-                ->whereHas('pengusul', function ($q) use ($user) {
-                    $q->where('pivot_pengusul_surat.id_pengusul', $user)
-                      ->whereIn('pivot_pengusul_surat.id_peran_keanggotaan', [1, 2]);
-                })
-                ->count();
-        } else {
-            $suratDitolak = 0;
-        }
+                ->orWhere('dibuat_oleh', $user);
+            })
+            ->count();
+    }
 
-        $notifikasiSurat = DatabaseNotification::where('notifiable_type', Pengusul::class)
-        ->where('notifiable_id', auth('pengusul')->id())
+    $notifikasiSurat = DatabaseNotification::where('notifiable_type', Pengusul::class)
+        ->where('notifiable_id', $user)
         ->latest()
         ->limit(5)
         ->get();
 
-        $columns = [
-            'no' => "No",
-            'nomor_surat' => "Nomor Surat",
-            'judul_surat' =>'Nama Surat', 
-            'tanggal_surat_dibuat' => 'Tanggal Terbit', 
-            'lampiran' => 'Dokumen', 
-            'tanggal_pengajuan' => 'Dibuat Pada'];
+    $columns = [
+        'no' => "No",
+        'nomor_surat' => "Nomor Surat",
+        'judul_surat' => 'Nama Surat',
+        'tanggal_surat_dibuat' => 'Tanggal Terbit',
+        'lampiran' => 'Dokumen',
+        'tanggal_pengajuan' => 'Dibuat Pada'
+    ];
 
-            return view('pengusul.mahasiswa.index', compact('columns','suratDiterima','suratDitolak','notifikasiSurat'));
-    }
+    return view('pengusul.mahasiswa.index', compact(
+        'columns',
+        'suratDiterima',
+        'suratDitolak',
+        'notifikasiSurat'
+    ));
+}
+
 
     public function pengajuan() {
         $columns = [
@@ -234,7 +245,8 @@ class mahasiswaController extends Controller
             $q->with('statusSurat')->latest('tanggal_rilis');
         }])
         ->whereYear('tanggal_pengajuan', $request->input('year', date('Y')))
-        ->where('is_draft', 1);
+        ->where('is_draft', 1)
+        ->orderBy('id_surat','desc');
 
     if ($guard === 'pengusul') {
         $query->where('dibuat_oleh', $user->id_pengusul);
@@ -296,7 +308,7 @@ class mahasiswaController extends Controller
                 $oleh = PengusulHelper::getNamaPengusul($surat->dibuat_oleh);
             }
             
-            $tanggal = \Carbon\Carbon::parse($item->tanggal_rilis)->translatedFormat('j-m-Y H:i');
+            $tanggal = Carbon::parse($item->tanggal_rilis)->translatedFormat('j-m-Y H:i');
             
             // Tentukan warna berdasarkan status
             $warna = 'bg-purple-500'; // default
@@ -426,30 +438,77 @@ class mahasiswaController extends Controller
         }
 
 
-    public function downloadPdf($id)
-    {
-        $surat = Surat::with(['dibuatOleh', 'jenisSurat', 'statusTerakhir.statusSurat'])->findOrFail($id);
-        $tanggalSurat = $surat->tanggal_surat_dibuat ? Carbon::parse($surat->tanggal_surat_dibuat)->translatedFormat('d-m-Y') : '-';
-        $tanggalPengajuan = $surat->tanggal_pengajuan ? Carbon::parse($surat->tanggal_pengajuan)->translatedFormat('d-m-Y') : '-';
-        $today = Carbon::now()->translatedFormat('d-m-Y');
-        $pdf = Pdf::loadView('pdf.surat', [
-            'surat' => $surat,
-            'tanggalSurat' => $tanggalSurat,
-            'tanggalPengajuan' => $tanggalPengajuan,
-            'today' => $today
-        ]);
-        $jenisSurat = $surat->jenisSurat->jenis_surat ?? 'Surat';
-        $namaPengusul = $surat->dibuatOleh->nama ?? 'Pengusul';
-        $tanggalSuratDibuat = $surat->tanggal_surat_dibuat 
-            ? Carbon::parse($surat->tanggal_surat_dibuat)->format('Y-m-d') 
-            : now()->format('Y-m-d');
-        $nomor = $surat->nomor_surat ?? 'no-nomor';
+        public function downloadPdf($id)
+        {
+            $surat = Surat::with([
+                'dibuatOleh',
+                'jenisSurat',
+                'statusTerakhir.statusSurat',
+                'pengusul'
+            ])->findOrFail($id);
 
-        $filename = Str::slug($jenisSurat) . '_' . 
-                    Str::slug($namaPengusul) . '_' . 
-                    $tanggalSuratDibuat . '_' . 
-                    Str::slug($nomor) . '.pdf';
-        return $pdf->stream($filename);
+            $tanggalSurat = $surat->tanggal_surat_dibuat
+            ? Carbon::parse($surat->tanggal_surat_dibuat)->translatedFormat('l, d F Y')
+            : '-';
+            $tanggalPengajuan = $surat->tanggal_pengajuan
+            ? Carbon::parse($surat->tanggal_pengajuan)->translatedFormat('l, d F Y')
+            : '-';
+            $today = Carbon::now()->translatedFormat('d-m-Y');
+
+            // --- Generate QR Pengaju & Kepala Sub (SVG) ---
+            $qrDir = storage_path('app/public');
+            if (!file_exists($qrDir)) {
+                mkdir($qrDir, 0777, true);
+            }
+            $qrPengajuPath = $qrDir . '/qr_pengaju.png';
+            $this->generateQrPNG($surat->dibuatOleh->nama ?? '-', $qrPengajuPath);
+
+            $qrKepalaSubPath = $qrDir . '/qr_kepalasub.png';
+            $this->generateQrPNG('https://tte.polibatam.ac.id/index.php?page=qrsign&id=UWtZZ1RNUkdldFU9', $qrKepalaSubPath);
+
+            $qrPengajuSVG = file_exists($qrPengajuPath) ? file_get_contents($qrPengajuPath) : '';
+            $qrKepalaSubSVG = file_exists($qrKepalaSubPath) ? file_get_contents($qrKepalaSubPath) : '';
+
+            $qrPengajuSVG = $this->cleanSVG($qrPengajuSVG);
+            $qrKepalaSubSVG = $this->cleanSVG($qrKepalaSubSVG);
+
+            $jenisSurat = $surat->jenisSurat->jenis_surat ?? 'Surat';
+            $namaPengusul = $surat->dibuatOleh->nama ?? 'Pengusul';
+            $tanggalSuratDibuat = $surat->tanggal_surat_dibuat 
+                ? Carbon::parse($surat->tanggal_surat_dibuat)->format('Y-m-d') 
+                : now()->format('Y-m-d');
+            $nomor = $surat->nomor_surat ?? 'no-nomor';
+
+            $filename = Str::slug($jenisSurat) . '_' . 
+                        Str::slug($namaPengusul) . '_' . 
+                        $tanggalSuratDibuat . '_' . 
+                        Str::slug($nomor) . '.pdf';
+
+            $pdf = Pdf::loadView('pdf.surat', [
+                'surat' => $surat,
+                'tanggalSurat' => $tanggalSurat,
+                'tanggalPengajuan' => $tanggalPengajuan,
+                'today' => $today,
+                'qrPengajuSVG' => $qrPengajuSVG,
+                'qrKepalaSubSVG' => $qrKepalaSubSVG,
+            ]);
+            return $pdf->download($filename);
+        }
+
+        private function generateQrPNG($data, $filename)
+        {
+            $options = new QROptions([
+                'outputType' => QRCode::OUTPUT_IMAGE_PNG,
+                'eccLevel' => QRCode::ECC_L,
+                'scale' => 5, // bisa disesuaikan
+            ]);
+        
+            (new QRCode($options))->render($data, $filename);
+        }
+
+    private function cleanSVG($svg)
+    {
+        return preg_replace('/<\\?xml.*?\\?>/', '', $svg);
     }
 
 }
