@@ -389,6 +389,17 @@ class adminController extends Controller
                 'success' => true,
                 'message' => 'Pengusul berhasil dihapus'
             ]);
+            } catch (\Illuminate\Database\QueryException $e) {
+                if ($e->getCode() == '23000') { // Foreign key constraint violation
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Pengusul tidak bisa dihapus karena masih memiliki relasi terhadap surat.'
+                    ], 400);
+                }
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Terjadi kesalahan: ' . $e->getMessage()
+                ], 500);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
